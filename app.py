@@ -1,5 +1,6 @@
 import librosa
 import librosa.feature as lf
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import random
@@ -19,7 +20,7 @@ FEATURE_EXTRACTOR = {
     'spectral_rolloff': lf.spectral_rolloff
 }
 
-def main(dataset_path, words, max_samples_per_word=50, split_ratio=0.8,
+def train_and_test_models(dataset_path, words, max_samples_per_word=50, split_ratio=0.8,
          feature_extractor_mode='melspectrogram', feature_scaling=True):
     # Data retrieving
     samples = get_sample_filenames(dataset_path, words, max_samples_per_word)
@@ -39,7 +40,7 @@ def main(dataset_path, words, max_samples_per_word=50, split_ratio=0.8,
     Y_test = test_features[:, -1]
     if feature_scaling:
         X_test = scaler.transform(X_test)
-    test_models(models, X_test, Y_test)
+    return test_models(models, X_test, Y_test)
 
 def get_sample_filenames(dataset_path, words, max_samples_per_word=-1):
     samples = dict()
@@ -89,18 +90,47 @@ def get_models():
     models.append(DecisionTreeClassifier(random_state=1, max_depth=10))
     models.append(RandomForestClassifier(random_state=2, max_depth=10))
     models.append(MLPClassifier(hidden_layer_sizes=(5, 5), max_iter=10000, random_state=3))
-    models.append(MLPClassifier(hidden_layer_sizes=(20, 15, 10, 10), max_iter=10000, random_state=4))
+    models.append(MLPClassifier(hidden_layer_sizes=(20, 15, 10, 10), max_iter=10000))
     models.append(SVC(random_state=5))
     return models
 
 def test_models(models, X_test, Y_test):
+    model_accuracies = []
     for model in models:
         results = model.predict(X_test)
-        print('{}: {:.2f}'.format(type(model).__name__, skm.accuracy_score(Y_test, results)))
+        model_accuracies.append((str(model), skm.accuracy_score(Y_test, results)))
+    return model_accuracies
+
+def train_and_test_models_by_sample_size(dataset_path, words, sample_count_range, split_ratio=0.8,
+                                         feature_extractor_mode='melspectrogram', feature_scaling=True):
+    data = {}
+    for i in sample_count_range:
+        model_accuracies = train_and_test_models(dataset_path, words, i, split_ratio,
+                                                 feature_extractor_mode, feature_scaling)
+        for model, accuracy in model_accuracies:
+            data.setdefault(model,[]).append(accuracy)
+    for model, y_points in data.items():
+        plt.plot(sample_count_range, y_points, label = model)
+    plt.grid(True)
+    plt.ylim(-0.1, 1.1)
+    plt.xlabel("Number of samples")
+    plt.ylabel("Accuracy")
+    plt.legend()
+    plt.show()
 
 if __name__ == '__main__':
     DATASET_PATH = 'dataset'
     # WORDS = [word for word in os.listdir(DATASET_PATH)
     #          if os.path.isdir(os.path.join(DATASET_PATH, word)) and not word.startswith('_')]
     WORDS = ['down', 'go', 'left', 'bird', 'cat', 'five', 'four', 'nine', 'no']
-    main(DATASET_PATH, WORDS)
+    max_samples_per_word = 40
+    sample_count_range = range(5, max_samples_per_word+1, 5)
+    split_ratio = 0.8
+    feature_extractor_mode = 'melspectrogram'
+    feature_scaling = True
+    model_accuracies = train_and_test_models(DATASET_PATH, WORDS, max_samples_per_word, split_ratio,
+                                             feature_extractor_mode, feature_scaling)
+    for model, accuracy in model_accuracies:
+        print('{}: {:.2f}'.format(model, accuracy))
+    train_and_test_models_by_sample_size(DATASET_PATH, WORDS, sample_count_range, split_ratio,
+                                         feature_extractor_mode, feature_scaling)
