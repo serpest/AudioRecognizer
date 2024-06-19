@@ -12,16 +12,15 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 import sklearn.metrics as skm
 
-FEATURE_EXTRACTOR = {
+FEATURE_EXTRACTORS = {
     'chroma_stft': lf.chroma_stft,
     'melspectrogram': lf.melspectrogram,
     'mfcc': lf.mfcc,    
-    'spectral_centroid': lf.spectral_centroid,
-    'spectral_rolloff': lf.spectral_rolloff
+    'spectral_centroid': lf.spectral_centroid
 }
 
 def train_and_test_models(dataset_path, words, max_samples_per_word=50, split_ratio=0.8,
-         feature_extractor_mode='melspectrogram', feature_scaling=True):
+         feature_extractor_mode='mfcc', feature_scaling=True):
     # Data retrieving
     samples = get_sample_filenames(dataset_path, words, max_samples_per_word)
     training_samples, test_samples = split_training_test_samples(samples, split_ratio)
@@ -70,9 +69,9 @@ def get_features(words, samples, mode='mfcc'):
 
 def get_audio_features(path, mode):
     audio, sampling_rate = librosa.load(path)
-    if mode not in FEATURE_EXTRACTOR:
+    if mode not in FEATURE_EXTRACTORS:
         raise ValueError("Illegal feature extraction mode")
-    features = np.mean(FEATURE_EXTRACTOR[mode](y=audio, sr=sampling_rate), axis=0)
+    features = np.mean(FEATURE_EXTRACTORS[mode](y=audio, sr=sampling_rate), axis=0)
     # See https://stackoverflow.com/questions/54221079/how-to-handle-difference-in-mfcc-feature-for-difference-audio-file
     # The parameter size=50 was chosen analyzing the specific dataset
     features = librosa.util.fix_length(features, size=50)
@@ -99,18 +98,19 @@ def test_models(models, X_test, Y_test):
     for model in models:
         results = model.predict(X_test)
         model_accuracies.append((str(model), skm.accuracy_score(Y_test, results)))
+        # print(f'{str(model)}:\n{str(skm.confusion_matrix(Y_test, results))}')
     return model_accuracies
 
 def train_and_test_models_by_sample_size(dataset_path, words, sample_count_range, split_ratio=0.8,
-                                         feature_extractor_mode='melspectrogram', feature_scaling=True):
+                                         feature_extractor_mode='mfcc', feature_scaling=True):
     data = {}
     for i in sample_count_range:
         model_accuracies = train_and_test_models(dataset_path, words, i, split_ratio,
                                                  feature_extractor_mode, feature_scaling)
         for model, accuracy in model_accuracies:
-            data.setdefault(model,[]).append(accuracy)
+            data.setdefault(model, []).append(accuracy)
     for model, y_points in data.items():
-        plt.plot(sample_count_range, y_points, label = model)
+        plt.plot(sample_count_range, y_points, label=model)
     plt.grid(True)
     plt.ylim(-0.1, 1.1)
     plt.xlabel("Number of samples")
